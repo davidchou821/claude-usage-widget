@@ -37,8 +37,8 @@ CCUSAGE = find_ccusage()
 WEEKDAY = ["一", "二", "三", "四", "五", "六", "日"]
 
 
-def sh(cmd, timeout=30):
-    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
+def sh(cmd, timeout=30, stdin=None):
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, input=stdin).stdout
 
 
 def kc_read(service):
@@ -83,15 +83,21 @@ def get_access_token(account):
         return json.loads(kc_read("Claude Code-credentials"))["claudeAiOauth"]["accessToken"]
     cred = json.loads(kc_read(KC_PREFIX + account))
     if cred.get("expiresAt", 0) / 1000 < time.time() + 60:  # 快過期就用 refresh token 續期
-        r = json.loads(sh([
-            "curl", "-s", "-m", "15", "-X", "POST", "https://console.anthropic.com/v1/oauth/token",
-            "-H", "Content-Type: application/json",
-            "-d", json.dumps({
+        try:
+            # token 走 stdin（-d @-），避免出現在行程列表
+            r = json.loads(sh([
+                "curl", "-s", "-m", "15", "-X", "POST", "https://console.anthropic.com/v1/oauth/token",
+                "-H", "Content-Type: application/json",
+                "-d", "@-",
+            ], stdin=json.dumps({
                 "grant_type": "refresh_token",
                 "refresh_token": cred["refreshToken"],
                 "client_id": CLIENT_ID,
-            }),
-        ]))
+            })))
+        except Exception:
+            raise RuntimeError("token 續期失敗（網路問題？稍後會自動重試）")
+        if "access_token" not in r:
+            raise RuntimeError(f"帳號 {account} 的 token 已失效，請按住 ⌥ 移除後重新儲存")
         cred["accessToken"] = r["access_token"]
         cred["refreshToken"] = r.get("refresh_token", cred["refreshToken"])
         cred["expiresAt"] = int((time.time() + r.get("expires_in", 3600)) * 1000)
@@ -111,7 +117,8 @@ def handle_action(args, st):
             'text returned of (display dialog "為此帳號取個名字（例如 work、personal）："'
             ' default answer "" with title "Claude 用量 widget")',
         ]).strip()
-        name = re.sub(r"\s+", "-", name)
+        # 去掉會破壞 SwiftBar 選單格式的字元，長度以選單列寬度為限
+        name = re.sub(r'[|"\'\\\s]+', "-", name).strip("-")[:20]
         if not name:
             sys.exit(0)  # 取消或空白
         try:
@@ -144,7 +151,7 @@ if account and account not in st.get("accounts", []):
 
 
 def color_for(pct):
-    if pct is None:
+    if not isinstance(pct, (int, float)):
         return ""
     if pct >= 85:
         return "red"
@@ -175,31 +182,40 @@ def fmt_tokens(n):
 plan_lines, metrics, five, scoped = [], [], None, None
 try:
     tok = get_access_token(account)
+    # token 走 stdin（-H @-），避免出現在行程列表
     usage = json.loads(sh([
         "curl", "-s", "-m", "15", "https://api.anthropic.com/api/oauth/usage",
-        "-H", f"Authorization: Bearer {tok}",
+        "-H", "@-",
         "-H", "anthropic-beta: oauth-2025-04-20",
-    ]))
-    five = usage.get("five_hour", {}).get("utilization")
-    seven = usage.get("seven_day", {}).get("utilization")
-    metrics.append(("5小時窗口", five, usage["five_hour"]["resets_at"]))
-    metrics.append(("週限額（全部模型）", seven, usage["seven_day"]["resets_at"]))
+    ], stdin=f"Authorization: Bearer {tok}"))
+    if usage.get("type") == "error":
+        raise RuntimeError((usage.get("error") or {}).get("message", "API error"))
+    fh = usage.get("five_hour") or {}
+    sd = usage.get("seven_day") or {}
+    five = fh.get("utilization")
+    seven = sd.get("utilization")
+    metrics.append(("5小時窗口", five, fh.get("resets_at", "")))
+    metrics.append(("週限額（全部模型）", seven, sd.get("resets_at", "")))
     for lim in usage.get("limits", []):
         if lim.get("kind") == "weekly_scoped" and lim.get("scope"):
             scoped = lim.get("percent")
             name = (lim["scope"].get("model") or {}).get("display_name") or "模型"
-            metrics.append((f"週限額（{name} 專屬）", scoped, lim["resets_at"]))
+            metrics.append((f"週限額（{name} 專屬）", scoped, lim.get("resets_at", "")))
     for label, pct, resets in metrics:
-        plan_lines.append(f"{label}：{pct:.0f}%（{fmt_reset(resets)}）| color={color_for(pct)}")
+        pct_txt = f"{pct:.0f}%" if isinstance(pct, (int, float)) else "?%"
+        reset_txt = fmt_reset(resets)
+        suffix = f"（{reset_txt}）" if reset_txt else ""
+        plan_lines.append(f"{label}：{pct_txt}{suffix} | color={color_for(pct)}")
 except Exception as e:
-    plan_lines.append(f"方案額度讀取失敗：{type(e).__name__} | color=gray")
+    msg = str(e).replace("|", "/")[:80] or type(e).__name__
+    plan_lines.append(f"方案額度讀取失敗：{msg} | color=gray")
 
 # ---- 用量 ≥ NOTIFY_AT% 發系統通知（以 resets_at 當窗口 id，同一窗口不重發）----
 notified = st.setdefault("notified", {})
 dirty = False
 for label, pct, resets in metrics:
     key = f"{account or '__current__'}:{label}"
-    if pct is not None and pct >= NOTIFY_AT and notified.get(key) != resets:
+    if isinstance(pct, (int, float)) and pct >= NOTIFY_AT and notified.get(key) != resets:
         who = f"「{account}」" if account else ""
         notify("Claude 用量提醒", f"{who}{label}已達 {pct:.0f}%（{fmt_reset(resets)}）")
         notified[key] = resets
@@ -230,13 +246,13 @@ except Exception as e:
     cc_lines.append(f"ccusage 讀取失敗：{type(e).__name__} | color=gray")
 
 # ---- 輸出 ----
-worst = max([p for p in (five, scoped) if p is not None], default=None)
+worst = max([p for p in (five, scoped) if isinstance(p, (int, float))], default=None)
 title_color = color_for(worst)
 title_label = account or "CC"
-if five is None:
+if not isinstance(five, (int, float)):
     print(f"{title_label} ?% | sfimage=gauge.with.needle")
 else:
-    scoped_txt = f" ⁄{scoped:.0f}" if scoped is not None else ""
+    scoped_txt = f" ⁄{scoped:.0f}" if isinstance(scoped, (int, float)) else ""
     print(
         f"{title_label} {five:.0f}%{scoped_txt} | sfimage=gauge.with.needle"
         + (f" color={title_color}" if title_color else "")

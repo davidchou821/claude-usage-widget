@@ -78,6 +78,14 @@ On first run macOS will ask for Keychain access → click "Always Allow". Enabli
 
 > 💡 When the menu bar is crowded, macOS **silently hides** items that don't fit. If you don't see the widget, ⌘-drag a few unused icons off the menu bar first.
 
+## Update
+
+```bash
+git pull
+```
+
+The plugin is symlinked into SwiftBar, so changes take effect on the next refresh — no reinstall needed.
+
 ## Uninstall
 
 ```bash

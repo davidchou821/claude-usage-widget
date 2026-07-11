@@ -78,6 +78,14 @@ claude-usage.5m.py   ← plugin 本體（檔名的 5m = 每 5 分鐘刷新）
 
 > 💡 選單列圖示太多時，macOS 會**默默隱藏**放不下的項目。看不到 widget 的話，先按住 ⌘ 拖掉幾個不用的圖示。
 
+## 更新
+
+```bash
+git pull
+```
+
+plugin 是 symlink 進 SwiftBar 的，拉完下次刷新自動生效，不用重裝。
+
 ## 移除
 
 ```bash
