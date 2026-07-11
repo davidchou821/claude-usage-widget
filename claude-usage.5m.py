@@ -1,5 +1,14 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
+# <xbar.title>Claude Usage Monitor</xbar.title>
+# <xbar.version>v1.0</xbar.version>
+# <xbar.author>David Chou</xbar.author>
+# <xbar.author.github>davidchou821</xbar.author.github>
+# <xbar.desc>Monitor your Claude subscription usage in the menu bar: 5-hour window & weekly limits (shared across claude.ai web / desktop / Claude Code), local token & API-equivalent cost stats, multi-account switching, and a system notification at 90%. Reads Claude Code's OAuth token from Keychain (macOS asks for permission); token is only sent to api.anthropic.com. Designed for SwiftBar.</xbar.desc>
+# <xbar.image>https://raw.githubusercontent.com/davidchou821/claude-usage-widget/main/docs/screenshot.png</xbar.image>
+# <xbar.dependencies>python3, Claude Code (logged in), ccusage (token/cost section)</xbar.dependencies>
+# <xbar.abouturl>https://github.com/davidchou821/claude-usage-widget</xbar.abouturl>
+#
 # SwiftBar plugin: Claude 用量監測（方案額度 % ＋ token/費用統計）
 # 資料來源：
 #   1. 方案額度：Keychain 的 Claude Code OAuth token → api.anthropic.com/api/oauth/usage
