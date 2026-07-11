@@ -101,6 +101,11 @@ Removes the plugin, config, and the widget's own Keychain entries. It does **not
 - Notification threshold: `NOTIFY_AT` (default 90)
 - Menu bar format: the `# ---- 輸出 ----` block at the end of the file
 
+## Roadmap
+
+- **Übersicht desktop card widget**: a weather-widget-style desktop dashboard reusing the same data logic, as a second display mode of this project
+- **Standalone OAuth login**: the widget runs its own authorization flow instead of reading Claude Code's Keychain credentials — also enables users who don't have Claude Code installed
+
 ## License
 
 [MIT](LICENSE)

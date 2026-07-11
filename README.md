@@ -101,6 +101,11 @@ plugin 是 symlink 進 SwiftBar 的，拉完下次刷新自動生效，不用重
 - 通知門檻：改 `NOTIFY_AT`（預設 90）
 - 選單列顯示格式：改檔尾 `# ---- 輸出 ----` 區塊
 
+## Roadmap
+
+- **Übersicht 桌面卡片 widget**：天氣 widget 風格的桌面儀表板，複用同一套資料邏輯，當本專案的第二種顯示模式
+- **OAuth 自行登入**：widget 自己走授權流程、不讀 Claude Code 的 Keychain 憑證，也讓沒裝 Claude Code 的使用者可用
+
 ## License
 
 [MIT](LICENSE)
