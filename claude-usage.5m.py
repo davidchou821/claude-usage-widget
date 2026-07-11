@@ -22,12 +22,15 @@ CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"  # Claude Code 的 OAuth clie
 NOTIFY_AT = 90  # 用量 ≥ 此 % 發系統通知，每個重置窗口只提醒一次
 
 
+# SwiftBar 的 PATH 只有系統目錄，補上 homebrew／nvm 讓 ccusage 與它依賴的 node 找得到
+_extra = ["/opt/homebrew/bin", "/usr/local/bin"] + sorted(
+    glob.glob(os.path.expanduser("~/.nvm/versions/node/*/bin"))
+)[-1:]
+os.environ["PATH"] = os.pathsep.join(_extra + [os.environ.get("PATH", "")])
+
+
 def find_ccusage():
-    hit = shutil.which("ccusage")
-    if hit:
-        return hit
-    candidates = sorted(glob.glob(os.path.expanduser("~/.nvm/versions/node/*/bin/ccusage")))
-    return candidates[-1] if candidates else "ccusage"
+    return shutil.which("ccusage") or "ccusage"
 
 
 CCUSAGE = find_ccusage()
