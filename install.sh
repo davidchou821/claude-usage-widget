@@ -11,6 +11,10 @@ if ! ls /Applications | grep -qi swiftbar; then
 fi
 
 if ! command -v ccusage >/dev/null && ! ls ~/.nvm/versions/node/*/bin/ccusage >/dev/null 2>&1; then
+  if ! command -v npm >/dev/null; then
+    echo "安裝 Node.js…"
+    brew install node
+  fi
   echo "安裝 ccusage…"
   npm install -g ccusage
 fi
