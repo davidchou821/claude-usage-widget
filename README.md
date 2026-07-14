@@ -74,7 +74,7 @@ claude-usage.5m.py   ← plugin 本體（檔名的 5m = 每 5 分鐘刷新）
 
 腳本會：裝 SwiftBar（brew cask）、Node.js 與 ccusage（若缺）→ 設定 SwiftBar plugin 目錄為 `~/.swiftbar` → 把 plugin symlink 進去 → 啟動 SwiftBar。
 
-首次執行 macOS 會問 Keychain 存取權 → 點「永久允許」。建議在 SwiftBar Preferences 勾 Launch at Login。
+首次執行 macOS 會問 Keychain 存取權 → 點「永久允許」。install.sh 會自動把 SwiftBar 加入登入項目，重開機／登出後選單列圖示會自動出現；若被手動移除，可到「系統設定 > 一般 > 登入項目」重新加回。
 
 > 💡 選單列圖示太多時，macOS 會**默默隱藏**放不下的項目。看不到 widget 的話，先按住 ⌘ 拖掉幾個不用的圖示。
 

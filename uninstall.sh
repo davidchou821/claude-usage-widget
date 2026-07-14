@@ -23,6 +23,16 @@ EOF
 
 rm -rf ~/.config/claude-usage-widget && echo "已移除設定檔"
 
+# 移除 install.sh 加的登入項目（若你把 SwiftBar 也用在其他 plugin，開機自動啟動可留著，跳過即可）
+osascript <<'EOF' >/dev/null 2>&1
+tell application "System Events"
+    if exists login item "SwiftBar" then
+        delete login item "SwiftBar"
+    end if
+end tell
+EOF
+echo "已移除 SwiftBar 開機自動啟動設定"
+
 open -g "swiftbar://refreshallplugins" 2>/dev/null || true
 
 echo "✅ 移除完成。SwiftBar 與 ccusage 未移除，若也不需要："

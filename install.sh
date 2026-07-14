@@ -26,4 +26,14 @@ chmod +x claude-usage.5m.py
 defaults write com.ameba.SwiftBar PluginDirectory "$HOME/.swiftbar"
 open -a SwiftBar
 
+# 把 SwiftBar 加入登入項目，重開機/登出後選單列圖示才會自動出現
+osascript <<'EOF' >/dev/null
+tell application "System Events"
+    if not (exists login item "SwiftBar") then
+        make login item at end with properties {path:"/Applications/SwiftBar.app", hidden:false}
+    end if
+end tell
+EOF
+echo "已設定 SwiftBar 開機自動啟動"
+
 echo "✅ 完成。首次執行請在 Keychain 彈窗點「永久允許」。"

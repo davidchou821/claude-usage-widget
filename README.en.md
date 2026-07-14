@@ -74,7 +74,7 @@ Two data sources:
 
 The script installs SwiftBar (brew cask), Node.js and ccusage (if missing) → sets `~/.swiftbar` as the SwiftBar plugin directory → symlinks the plugin → launches SwiftBar.
 
-On first run macOS will ask for Keychain access → click "Always Allow". Enabling Launch at Login in SwiftBar Preferences is recommended.
+On first run macOS will ask for Keychain access → click "Always Allow". `install.sh` automatically adds SwiftBar as a login item, so the menu bar icon reappears after a restart/logout; if it's ever removed, re-add it in System Settings > General > Login Items.
 
 > 💡 When the menu bar is crowded, macOS **silently hides** items that don't fit. If you don't see the widget, ⌘-drag a few unused icons off the menu bar first.
 
