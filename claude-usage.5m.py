@@ -94,6 +94,17 @@ def notify(title, msg):
     )
 
 
+def current_email():
+    """Claude Code 目前登入帳號的 email（.claude.json 的 oauthAccount）；讀不到就回空字串"""
+    base = os.path.expanduser(os.environ.get("CLAUDE_CONFIG_DIR") or "~")
+    try:
+        with open(os.path.join(base, ".claude.json")) as f:
+            email = (json.load(f).get("oauthAccount") or {}).get("emailAddress") or ""
+    except Exception:
+        return ""
+    return re.sub(r"[|\s]+", "", str(email))[:60]  # 去掉會破壞 SwiftBar 選單格式的字元
+
+
 def resolve_client_id():
     """VAR_CLIENT_ID 有填就用；auto 就從本機 Claude Code（原生執行檔或 npm 版 cli.js）裡找 CLIENT_ID。"""
     if CLIENT_ID.lower() != "auto":
@@ -162,12 +173,18 @@ def handle_action(args, st):
         kc_write(KC_PREFIX + name, json.dumps(cred))
         if name not in st.setdefault("accounts", []):
             st["accounts"].append(name)
+        emails = st.setdefault("account_emails", {})
+        emails.pop(name, None)
+        email = current_email()
+        if email:
+            emails[name] = email
         st["account"] = name
         save_state(st)
     elif cmd == "--remove":
         name = args[1]
         kc_delete(KC_PREFIX + name)
         st["accounts"] = [a for a in st.get("accounts", []) if a != name]
+        st.get("account_emails", {}).pop(name, None)
         if st.get("account") == name:
             st["account"] = ""
         save_state(st)
@@ -335,7 +352,15 @@ else:
         + (f" color={title_color}" if title_color else "")
     )
 print("---")
-print(f"方案額度（{account or '目前登入帳號'}）| size=12 color=gray")
+cur_email = current_email()
+
+
+def with_email(name, fmt="{name}（{email}）"):
+    email = st.get("account_emails", {}).get(name)
+    return fmt.format(name=name, email=email) if email else name
+
+
+print(f"方案額度（{with_email(account, '{name}：{email}') if account else cur_email or '目前登入帳號'}）| size=12 color=gray")
 for l in plan_lines:
     print(l)
 print("---")
@@ -345,10 +370,11 @@ for l in cc_lines:
 print("---")
 print("帳號 | size=12 color=gray")
 mark = "✓ " if not account else ""
-print(f"{mark}目前登入（跟隨 Claude Code）| bash={PLUGIN} param1=--switch param2=__current__ terminal=false refresh=true")
+cur_txt = f"目前登入：{cur_email}（跟隨 Claude Code）" if cur_email else "目前登入（跟隨 Claude Code）"
+print(f"{mark}{cur_txt} | bash={PLUGIN} param1=--switch param2=__current__ terminal=false refresh=true")
 for name in st.get("accounts", []):
     mark = "✓ " if name == account else ""
-    print(f"{mark}{name} | bash={PLUGIN} param1=--switch param2={name} terminal=false refresh=true")
+    print(f"{mark}{with_email(name)} | bash={PLUGIN} param1=--switch param2={name} terminal=false refresh=true")
     print(f"移除「{name}」 | alternate=true color=red bash={PLUGIN} param1=--remove param2={name} terminal=false refresh=true")
 print(f"把目前登入存為新帳號… | bash={PLUGIN} param1=--save terminal=false refresh=true")
 print("---")

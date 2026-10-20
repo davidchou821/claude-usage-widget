@@ -32,6 +32,8 @@ macOS 選單列的 Claude 用量監測 widget（SwiftBar plugin）。
 2. 在 Claude Code 改登入帳號 B → 再存一次（如 `personal`）
 3. 之後點帳號名稱即可切換查詢對象；「目前登入」則永遠跟隨 Claude Code 當下登入的帳號
 
+「方案額度」標題和「目前登入」會顯示 Claude Code 目前登入帳號的 email（讀 `~/.claude.json`，有設 `CLAUDE_CONFIG_DIR` 就讀該目錄）；已存帳號會記下存檔當下的 email，顯示成「名稱（email）」。
+
 已存帳號的 token 放在 Keychain 的 `claude-usage-widget:<名稱>` 條目，快過期時會用 refresh token 自動續期，不需重新登入（續期用的 OAuth client ID 預設從本機 Claude Code 自動讀取，見下方「自訂」）。按住 **⌥（Option）** 點帳號名稱可移除。選中非「目前登入」帳號時，選單列的 `CC` 會換成該帳號名稱。
 
 ⚠ Token／費用區塊來自本機紀錄，跟選了哪個帳號無關。
