@@ -197,6 +197,8 @@ def fmt_reset(iso):
     try:
         dt = datetime.fromisoformat(iso).astimezone()
         now = datetime.now(timezone.utc).astimezone()
+        if dt <= now:
+            return "已重置，等待更新"
         prefix = "" if dt.date() == now.date() else f"週{WEEKDAY[dt.weekday()]} "
         return f"{prefix}{dt:%H:%M} 重置"
     except Exception:
@@ -212,26 +214,68 @@ def fmt_tokens(n):
 
 
 # ---- 方案額度 ----
-plan_lines, metrics, five, scoped = [], [], None, None
-try:
-    tok = get_access_token(account)
-    # token 走 stdin（-H @-），避免出現在行程列表
-    usage = json.loads(sh([
-        "curl", "-s", "-m", "15", "https://api.anthropic.com/api/oauth/usage",
+def fetch_usage(tok):
+    """回傳 (HTTP 狀態碼, retry-after 秒數, JSON)。token 走 stdin（-H @-），避免出現在行程列表"""
+    out = sh([
+        "curl", "-s", "-m", "15", "-D", "-", "https://api.anthropic.com/api/oauth/usage",
         "-H", "@-",
         "-H", "anthropic-beta: oauth-2025-04-20",
-    ], stdin=f"Authorization: Bearer {tok}"))
-    if usage.get("type") == "error":
-        raise RuntimeError((usage.get("error") or {}).get("message", "API error"))
+    ], stdin=f"Authorization: Bearer {tok}")
+    if not out:
+        raise RuntimeError("連不上 api.anthropic.com（網路問題？）")
+    head, body = (re.split(r"\r?\n\r?\n", out, maxsplit=1) + [""])[:2]  # text 模式下 \r\n 已被轉成 \n
+    code = re.match(r"HTTP/\S+ (\d+)", head)
+    retry = re.search(r"(?im)^retry-after:\s*(\d+)", head)
+    code = int(code.group(1)) if code else 0
+    try:
+        data = json.loads(body)
+    except ValueError:
+        raise RuntimeError(f"API 回應不是 JSON（HTTP {code}）")
+    return code, int(retry.group(1)) if retry else 0, data
+
+
+def live(pct, iso):
+    """快取裡已經過了重置時間的窗口，數字不準了，改回 None（顯示 ?%）"""
+    try:
+        return None if datetime.fromisoformat(iso) <= datetime.now(timezone.utc) else pct
+    except Exception:
+        return pct
+
+
+plan_lines, metrics, five, scoped = [], [], None, None
+# 上次成功的回應與限流截止時間；被 429 時照 retry-after 暫停呼叫，先顯示快取
+usage_cache = st.setdefault("usage_cache", {})
+cached = usage_cache.get(account or "__current__") or {}
+try:
+    usage, now = None, time.time()
+    if now >= cached.get("retry_at", 0):
+        code, retry, resp = fetch_usage(get_access_token(account))
+        # 錯誤格式有 {"type":"error","error":{...}} 與只有 {"error":{...}} 兩種
+        err = resp.get("error") if isinstance(resp.get("error"), dict) else {}
+        if code == 429 or err.get("type") == "rate_limit_error":
+            cached["retry_at"] = now + max(retry, 300)
+        elif err or resp.get("type") == "error" or code >= 400:
+            raise RuntimeError(err.get("message") or f"HTTP {code}")
+        else:
+            usage, cached = resp, {"at": now, "data": resp}
+        usage_cache[account or "__current__"] = cached
+        save_state(st)
+    if usage is None:  # 限流中
+        wait = max(1, round((cached["retry_at"] - now) / 60))
+        if not cached.get("data"):
+            raise RuntimeError(f"API 限流中，約 {wait} 分鐘後重試")
+        usage = cached["data"]
+        ago = round((now - cached["at"]) / 60)
+        plan_lines.append(f"API 限流中：顯示 {ago} 分鐘前的資料（約 {wait} 分鐘後重試）| color=gray")
     fh = usage.get("five_hour") or {}
     sd = usage.get("seven_day") or {}
-    five = fh.get("utilization")
-    seven = sd.get("utilization")
+    five = live(fh.get("utilization"), fh.get("resets_at", ""))
+    seven = live(sd.get("utilization"), sd.get("resets_at", ""))
     metrics.append(("5小時窗口", five, fh.get("resets_at", "")))
     metrics.append(("週限額（全部模型）", seven, sd.get("resets_at", "")))
     for lim in usage.get("limits", []):
         if lim.get("kind") == "weekly_scoped" and lim.get("scope"):
-            scoped = lim.get("percent")
+            scoped = live(lim.get("percent"), lim.get("resets_at", ""))
             name = (lim["scope"].get("model") or {}).get("display_name") or "模型"
             metrics.append((f"週限額（{name} 專屬）", scoped, lim.get("resets_at", "")))
     for label, pct, resets in metrics:
