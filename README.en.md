@@ -32,13 +32,13 @@ In the "帳號" (accounts) section at the bottom of the menu:
 2. Switch Claude Code to account B → save again (e.g. `personal`)
 3. Click an account name to switch which account is queried; "目前登入" (current login) always follows whatever Claude Code is logged into
 
-Saved tokens live in Keychain entries named `claude-usage-widget:<name>` and are auto-renewed via refresh token — no re-login needed. Hold **⌥ (Option)** and click an account to remove it. When a named account is selected, the menu bar label changes from `CC` to that account's name.
+Saved tokens live in Keychain entries named `claude-usage-widget:<name>` and are auto-renewed via refresh token — no re-login needed (the OAuth client ID used for renewal is read from your local Claude Code install by default; see Customization below). Hold **⌥ (Option)** and click an account to remove it. When a named account is selected, the menu bar label changes from `CC` to that account's name.
 
 ⚠ The tokens/cost section comes from local logs and is unaffected by account selection.
 
 ## Usage notifications
 
-When any limit (5-hour window / weekly) reaches **≥90%**, a macOS notification fires — once per reset window (keyed by `resets_at`), so it won't spam every refresh. Change the threshold via the `NOTIFY_AT` constant.
+When any limit (5-hour window / weekly) reaches **≥90%**, a macOS notification fires — once per reset window (keyed by `resets_at`), so it won't spam every refresh. Change the threshold via the `VAR_NOTIFY_AT` plugin variable (see Customization below).
 
 ## Security & privacy
 
@@ -98,7 +98,10 @@ Removes the plugin, config, and the widget's own Keychain entries. It does **not
 
 - Refresh interval: rename the file (`5m`→`1m`, `30s`…) and recreate the symlink
 - Color thresholds: the 85/60 in `color_for()`
-- Notification threshold: `NOTIFY_AT` (default 90)
+- Notification threshold: plugin variable `VAR_NOTIFY_AT` (default 90)
+- OAuth client ID for token renewal: plugin variable `VAR_CLIENT_ID` (default `auto` = read from your local Claude Code; if that fails the menu tells you, then fill it in manually)
+
+Plugin variables are edited in SwiftBar's plugin settings (or xbar's plugin page) — no code changes needed.
 - Menu bar format: the `# ---- 輸出 ----` block at the end of the file
 
 ## Roadmap

@@ -1,13 +1,15 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # <xbar.title>Claude Usage Monitor</xbar.title>
-# <xbar.version>v1.0</xbar.version>
+# <xbar.version>v1.1</xbar.version>
 # <xbar.author>David Chou</xbar.author>
 # <xbar.author.github>davidchou821</xbar.author.github>
 # <xbar.desc>Monitor your Claude subscription usage in the menu bar: 5-hour window & weekly limits (shared across claude.ai web / desktop / Claude Code), local token & API-equivalent cost stats, multi-account switching, and a system notification at 90%. Reads Claude Code's OAuth token from Keychain (macOS asks for permission); token is only sent to api.anthropic.com. Designed for SwiftBar.</xbar.desc>
 # <xbar.image>https://raw.githubusercontent.com/davidchou821/claude-usage-widget/main/docs/screenshot.png</xbar.image>
 # <xbar.dependencies>python3, Claude Code (logged in), ccusage (token/cost section)</xbar.dependencies>
 # <xbar.abouturl>https://github.com/davidchou821/claude-usage-widget</xbar.abouturl>
+# <xbar.var>number(VAR_NOTIFY_AT="90"): Send a system notification when usage reaches this percent (once per reset window).</xbar.var>
+# <xbar.var>string(VAR_CLIENT_ID="auto"): OAuth client ID used to refresh saved accounts' tokens. "auto" reads it from your local Claude Code install.</xbar.var>
 #
 # SwiftBar plugin: Claude 用量監測（方案額度 % ＋ token/費用統計）
 # 資料來源：
@@ -16,6 +18,7 @@
 #   2. token/費用：ccusage（讀 ~/.claude/projects 本機紀錄，不分帳號，費用為 API 等值價非實際帳單）
 import glob
 import json
+import mmap
 import os
 import re
 import shutil
@@ -27,12 +30,16 @@ from datetime import datetime, timezone
 PLUGIN = os.path.abspath(__file__)
 STATE_FILE = os.path.expanduser("~/.config/claude-usage-widget/state.json")
 KC_PREFIX = "claude-usage-widget:"  # 自存帳號的 Keychain service 前綴
-CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"  # Claude Code 的 OAuth client（續期 token 用）
-NOTIFY_AT = 90  # 用量 ≥ 此 % 發系統通知，每個重置窗口只提醒一次
+# 以下兩項是 xbar 變數（SwiftBar／xbar 的外掛設定裡可改），沒設就用預設值
+try:
+    NOTIFY_AT = float(os.environ.get("VAR_NOTIFY_AT") or 90)  # 用量 ≥ 此 % 發系統通知，每個重置窗口只提醒一次
+except ValueError:
+    NOTIFY_AT = 90
+CLIENT_ID = (os.environ.get("VAR_CLIENT_ID") or "auto").strip()  # 續期 token 用的 OAuth client；auto＝從本機 Claude Code 讀
 
 
-# SwiftBar 的 PATH 只有系統目錄，補上 homebrew／nvm 讓 ccusage 與它依賴的 node 找得到
-_extra = ["/opt/homebrew/bin", "/usr/local/bin"] + sorted(
+# SwiftBar 的 PATH 只有系統目錄，補上 homebrew／nvm 讓 ccusage 與它依賴的 node、claude 找得到
+_extra = ["/opt/homebrew/bin", "/usr/local/bin", os.path.expanduser("~/.local/bin")] + sorted(
     glob.glob(os.path.expanduser("~/.nvm/versions/node/*/bin"))
 )[-1:]
 os.environ["PATH"] = os.pathsep.join(_extra + [os.environ.get("PATH", "")])
@@ -87,11 +94,28 @@ def notify(title, msg):
     )
 
 
+def resolve_client_id():
+    """VAR_CLIENT_ID 有填就用；auto 就從本機 Claude Code（原生執行檔或 npm 版 cli.js）裡找 CLIENT_ID。"""
+    if CLIENT_ID.lower() != "auto":
+        return CLIENT_ID
+    path = shutil.which("claude")
+    if path:
+        try:
+            with open(os.path.realpath(path), "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                m = re.search(rb'[^_]CLIENT_ID:"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"', mm)
+                if m:
+                    return m.group(1).decode()
+        except (OSError, ValueError):
+            pass
+    raise RuntimeError("找不到 Claude Code 的 OAuth client ID，請在外掛設定填 VAR_CLIENT_ID")
+
+
 def get_access_token(account):
     if not account:
         return json.loads(kc_read("Claude Code-credentials"))["claudeAiOauth"]["accessToken"]
     cred = json.loads(kc_read(KC_PREFIX + account))
     if cred.get("expiresAt", 0) / 1000 < time.time() + 60:  # 快過期就用 refresh token 續期
+        client_id = resolve_client_id()
         try:
             # token 走 stdin（-d @-），避免出現在行程列表
             r = json.loads(sh([
@@ -101,7 +125,7 @@ def get_access_token(account):
             ], stdin=json.dumps({
                 "grant_type": "refresh_token",
                 "refresh_token": cred["refreshToken"],
-                "client_id": CLIENT_ID,
+                "client_id": client_id,
             })))
         except Exception:
             raise RuntimeError("token 續期失敗（網路問題？稍後會自動重試）")
