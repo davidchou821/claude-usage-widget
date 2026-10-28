@@ -34,6 +34,8 @@ In the "帳號" (accounts) section at the bottom of the menu:
 
 The plan-usage header and the "目前登入" item show the email of the account Claude Code is logged into (read from `~/.claude.json`, or from `$CLAUDE_CONFIG_DIR` if set); saved accounts remember the email at save time and appear as "name (email)".
 
+The header also shows the subscription plan (e.g. "方案額度・Pro (email)", "Max 20x"), read from `subscriptionType` / `rateLimitTier` in the Keychain credentials; saved accounts keep the plan from save time, so re-save after upgrading or downgrading.
+
 Saved tokens live in Keychain entries named `claude-usage-widget:<name>` and are auto-renewed via refresh token — no re-login needed (the OAuth client ID used for renewal is read from your local Claude Code install by default; see Customization below). Hold **⌥ (Option)** and click an account to remove it. When a named account is selected, the menu bar label changes from `CC` to that account's name.
 
 ⚠ The tokens/cost section comes from local logs and is unaffected by account selection.
