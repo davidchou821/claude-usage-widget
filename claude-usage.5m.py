@@ -121,10 +121,25 @@ def resolve_client_id():
     raise RuntimeError("找不到 Claude Code 的 OAuth client ID，請在外掛設定填 VAR_CLIENT_ID")
 
 
-def get_access_token(account):
+def read_cred(account):
+    """Keychain 裡的 claudeAiOauth（目前登入）或自存帳號的副本"""
     if not account:
-        return json.loads(kc_read("Claude Code-credentials"))["claudeAiOauth"]["accessToken"]
-    cred = json.loads(kc_read(KC_PREFIX + account))
+        return json.loads(kc_read("Claude Code-credentials"))["claudeAiOauth"]
+    return json.loads(kc_read(KC_PREFIX + account))
+
+
+def plan_name(cred):
+    """subscriptionType（pro/max/team…）＋ rateLimitTier 裡的倍數（分 Max 5x/20x）；讀不到回空字串"""
+    sub = str(cred.get("subscriptionType") or "")
+    if not sub:
+        return ""
+    m = re.search(r"(\d+)x", str(cred.get("rateLimitTier") or ""))
+    return re.sub(r"[|\s]+", "", sub.capitalize())[:20] + (f" {m.group(1)}x" if m else "")
+
+
+def get_access_token(account, cred):
+    if not account:
+        return cred["accessToken"]
     if cred.get("expiresAt", 0) / 1000 < time.time() + 60:  # 快過期就用 refresh token 續期
         client_id = resolve_client_id()
         try:
@@ -259,14 +274,16 @@ def live(pct, iso):
         return pct
 
 
-plan_lines, metrics, five, scoped = [], [], None, None
+plan_lines, metrics, five, scoped, plan = [], [], None, None, ""
 # 上次成功的回應與限流截止時間；被 429 時照 retry-after 暫停呼叫，先顯示快取
 usage_cache = st.setdefault("usage_cache", {})
 cached = usage_cache.get(account or "__current__") or {}
 try:
+    cred = read_cred(account)
+    plan = plan_name(cred)
     usage, now = None, time.time()
     if now >= cached.get("retry_at", 0):
-        code, retry, resp = fetch_usage(get_access_token(account))
+        code, retry, resp = fetch_usage(get_access_token(account, cred))
         # 錯誤格式有 {"type":"error","error":{...}} 與只有 {"error":{...}} 兩種
         err = resp.get("error") if isinstance(resp.get("error"), dict) else {}
         if code == 429 or err.get("type") == "rate_limit_error":
@@ -360,7 +377,8 @@ def with_email(name, fmt="{name}（{email}）"):
     return fmt.format(name=name, email=email) if email else name
 
 
-print(f"方案額度（{with_email(account, '{name}：{email}') if account else cur_email or '目前登入帳號'}）| size=12 color=gray")
+plan_txt = f"・{plan}" if plan else ""
+print(f"方案額度{plan_txt}（{with_email(account, '{name}：{email}') if account else cur_email or '目前登入帳號'}）| size=12 color=gray")
 for l in plan_lines:
     print(l)
 print("---")
