@@ -30,6 +30,7 @@ from datetime import datetime, timezone
 PLUGIN = os.path.abspath(__file__)
 STATE_FILE = os.path.expanduser("~/.config/claude-usage-widget/state.json")
 KC_PREFIX = "claude-usage-widget:"  # 自存帳號的 Keychain service 前綴
+PLAN_TTL = 6 * 3600  # 訂閱方案的快取秒數
 # 以下兩項是 xbar 變數（SwiftBar／xbar 的外掛設定裡可改），沒設就用預設值
 try:
     NOTIFY_AT = float(os.environ.get("VAR_NOTIFY_AT") or 90)  # 用量 ≥ 此 % 發系統通知，每個重置窗口只提醒一次
@@ -128,12 +129,12 @@ def read_cred(account):
     return json.loads(kc_read(KC_PREFIX + account))
 
 
-def plan_name(cred):
-    """subscriptionType（pro/max/team…）＋ rateLimitTier 裡的倍數（分 Max 5x/20x）；讀不到回空字串"""
-    sub = str(cred.get("subscriptionType") or "")
+def plan_name(sub, tier):
+    """方案（pro/max/team…）＋ rate limit tier 裡的倍數（分 Max 5x/20x）；讀不到回空字串"""
+    sub = re.sub(r"^claude_", "", str(sub or ""))
     if not sub:
         return ""
-    m = re.search(r"(\d+)x", str(cred.get("rateLimitTier") or ""))
+    m = re.search(r"(\d+)x", str(tier or ""))
     return re.sub(r"[|\s]+", "", sub.capitalize())[:20] + (f" {m.group(1)}x" if m else "")
 
 
@@ -190,6 +191,7 @@ def handle_action(args, st):
             st["accounts"].append(name)
         emails = st.setdefault("account_emails", {})
         emails.pop(name, None)
+        st.get("plan_cache", {}).pop(name, None)
         email = current_email()
         if email:
             emails[name] = email
@@ -200,6 +202,7 @@ def handle_action(args, st):
         kc_delete(KC_PREFIX + name)
         st["accounts"] = [a for a in st.get("accounts", []) if a != name]
         st.get("account_emails", {}).pop(name, None)
+        st.get("plan_cache", {}).pop(name, None)
         if st.get("account") == name:
             st["account"] = ""
         save_state(st)
@@ -266,6 +269,17 @@ def fetch_usage(tok):
     return code, int(retry.group(1)) if retry else 0, data
 
 
+def fetch_plan(tok):
+    """api/oauth/profile 的目前方案。Keychain 的 subscriptionType 只在登入時寫入，升降級後不會更新"""
+    out = sh([
+        "curl", "-s", "-m", "15", "https://api.anthropic.com/api/oauth/profile",
+        "-H", "@-",
+        "-H", "anthropic-beta: oauth-2025-04-20",
+    ], stdin=f"Authorization: Bearer {tok}")
+    org = (json.loads(out).get("organization") or {}) if out else {}
+    return plan_name(org.get("organization_type"), org.get("rate_limit_tier"))
+
+
 def live(pct, iso):
     """快取裡已經過了重置時間的窗口，數字不準了，改回 None（顯示 ?%）"""
     try:
@@ -278,10 +292,23 @@ plan_lines, metrics, five, scoped, plan = [], [], None, None, ""
 # 上次成功的回應與限流截止時間；被 429 時照 retry-after 暫停呼叫，先顯示快取
 usage_cache = st.setdefault("usage_cache", {})
 cached = usage_cache.get(account or "__current__") or {}
+plan_cache = st.setdefault("plan_cache", {})
 try:
     cred = read_cred(account)
-    plan = plan_name(cred)
     usage, now = None, time.time()
+    # 方案很少變動，profile 每 PLAN_TTL 秒查一次；查不到就 30 分鐘後再試，先用快取或 Keychain 的值
+    # 目前登入帳號以 email 區分，Claude Code 換帳號登入時不會沿用舊方案
+    plan_key = account or "__current__:" + current_email()
+    pc = plan_cache.get(plan_key) or {}
+    if now >= pc.get("next", 0):
+        try:
+            p = fetch_plan(get_access_token(account, cred))
+        except Exception:
+            p = ""
+        pc = {"plan": p or pc.get("plan", ""), "next": now + (PLAN_TTL if p else 1800)}
+        plan_cache[plan_key] = pc
+        save_state(st)
+    plan = pc.get("plan") or plan_name(cred.get("subscriptionType"), cred.get("rateLimitTier"))
     if now >= cached.get("retry_at", 0):
         code, retry, resp = fetch_usage(get_access_token(account, cred))
         # 錯誤格式有 {"type":"error","error":{...}} 與只有 {"error":{...}} 兩種
