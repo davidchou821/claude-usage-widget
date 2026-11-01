@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # <xbar.title>Claude Usage Monitor</xbar.title>
-# <xbar.version>v1.1</xbar.version>
+# <xbar.version>v1.2</xbar.version>
 # <xbar.author>David Chou</xbar.author>
 # <xbar.author.github>davidchou821</xbar.author.github>
 # <xbar.desc>Monitor your Claude subscription usage in the menu bar: 5-hour window & weekly limits (shared across claude.ai web / desktop / Claude Code), local token & API-equivalent cost stats, multi-account switching, and a system notification at 90%. Reads Claude Code's OAuth token from Keychain (macOS asks for permission); token is only sent to api.anthropic.com. Designed for SwiftBar.</xbar.desc>
@@ -290,17 +290,20 @@ def live(pct, iso):
 
 plan_lines, metrics, five, scoped, plan = [], [], None, None, ""
 # 上次成功的回應與限流截止時間；被 429 時照 retry-after 暫停呼叫，先顯示快取
+# 目前登入帳號的 token 由 Claude Code 自己續期（widget 續期會換掉它的 refresh token），過期時也先顯示快取
 usage_cache = st.setdefault("usage_cache", {})
 cached = usage_cache.get(account or "__current__") or {}
 plan_cache = st.setdefault("plan_cache", {})
 try:
     cred = read_cred(account)
     usage, now = None, time.time()
-    # 方案很少變動，profile 每 PLAN_TTL 秒查一次；查不到就 30 分鐘後再試，先用快取或 Keychain 的值
+    expired = not account and cred.get("expiresAt", now * 1000) / 1000 < now
+    # 方案很少變動，profile 每 PLAN_TTL 秒查一次；查不到就 30 分鐘後再試，先用快取；
+    # 不退回 Keychain 的 subscriptionType，那是登入當下的值，升降級後會顯示錯的方案，寧可不顯示
     # 目前登入帳號以 email 區分，Claude Code 換帳號登入時不會沿用舊方案
     plan_key = account or "__current__:" + current_email()
     pc = plan_cache.get(plan_key) or {}
-    if now >= pc.get("next", 0):
+    if not expired and now >= pc.get("next", 0):
         try:
             p = fetch_plan(get_access_token(account, cred))
         except Exception:
@@ -308,26 +311,32 @@ try:
         pc = {"plan": p or pc.get("plan", ""), "next": now + (PLAN_TTL if p else 1800)}
         plan_cache[plan_key] = pc
         save_state(st)
-    plan = pc.get("plan") or plan_name(cred.get("subscriptionType"), cred.get("rateLimitTier"))
-    if now >= cached.get("retry_at", 0):
+    plan = pc.get("plan", "")
+    if not expired and now >= cached.get("retry_at", 0):
         code, retry, resp = fetch_usage(get_access_token(account, cred))
         # 錯誤格式有 {"type":"error","error":{...}} 與只有 {"error":{...}} 兩種
         err = resp.get("error") if isinstance(resp.get("error"), dict) else {}
         if code == 429 or err.get("type") == "rate_limit_error":
             cached["retry_at"] = now + max(retry, 300)
+        elif not account and (code == 401 or err.get("type") == "authentication_error"):
+            expired = True
         elif err or resp.get("type") == "error" or code >= 400:
             raise RuntimeError(err.get("message") or f"HTTP {code}")
         else:
             usage, cached = resp, {"at": now, "data": resp}
         usage_cache[account or "__current__"] = cached
         save_state(st)
-    if usage is None:  # 限流中
-        wait = max(1, round((cached["retry_at"] - now) / 60))
+    if usage is None:  # 登入過期或限流中
+        if expired:
+            reason, hint = "Claude Code 登入已過期", "開一下 Claude Code 就會自動續期"
+        else:
+            reason, hint = "API 限流中", f"約 {max(1, round((cached['retry_at'] - now) / 60))} 分鐘後重試"
         if not cached.get("data"):
-            raise RuntimeError(f"API 限流中，約 {wait} 分鐘後重試")
+            raise RuntimeError(f"{reason}，{hint}")
         usage = cached["data"]
         ago = round((now - cached["at"]) / 60)
-        plan_lines.append(f"API 限流中：顯示 {ago} 分鐘前的資料（約 {wait} 分鐘後重試）| color=gray")
+        ago_txt = f"{ago} 分鐘" if ago < 120 else f"{ago // 60} 小時"
+        plan_lines.append(f"{reason}：顯示 {ago_txt}前的資料（{hint}）| color=gray")
     fh = usage.get("five_hour") or {}
     sd = usage.get("seven_day") or {}
     five = live(fh.get("utilization"), fh.get("resets_at", ""))
