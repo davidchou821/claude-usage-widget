@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # <xbar.title>Claude Usage Monitor</xbar.title>
-# <xbar.version>v1.2</xbar.version>
+# <xbar.version>v1.3</xbar.version>
 # <xbar.author>David Chou</xbar.author>
 # <xbar.author.github>davidchou821</xbar.author.github>
 # <xbar.desc>Monitor your Claude subscription usage in the menu bar: 5-hour window & weekly limits (shared across claude.ai web / desktop / Claude Code), local token & API-equivalent cost stats, multi-account switching, and a system notification at 90%. Reads Claude Code's OAuth token from Keychain (macOS asks for permission); token is only sent to api.anthropic.com. Designed for SwiftBar.</xbar.desc>
