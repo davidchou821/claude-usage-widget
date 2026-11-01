@@ -31,7 +31,6 @@ PLUGIN = os.path.abspath(__file__)
 STATE_FILE = os.path.expanduser("~/.config/claude-usage-widget/state.json")
 KC_PREFIX = "claude-usage-widget:"  # 自存帳號的 Keychain service 前綴
 PLAN_TTL = 6 * 3600  # 訂閱方案的快取秒數
-PLAN_PRICE = {"Pro": 20, "Max 5x": 100, "Max 20x": 200}  # 月費牌價（美元），跟本月 API 等值費用對照用
 # 以下兩項是 xbar 變數（SwiftBar／xbar 的外掛設定裡可改），沒設就用預設值
 try:
     NOTIFY_AT = float(os.environ.get("VAR_NOTIFY_AT") or 90)  # 用量 ≥ 此 % 發系統通知，每個重置窗口只提醒一次
@@ -389,13 +388,7 @@ try:
             )
     m = json.loads(sh([CCUSAGE, "daily", "--json", "--since", month_start], timeout=60))
     mcost = sum(x.get("totalCost", 0) for x in m.get("daily", []))
-    price = PLAN_PRICE.get(plan)
-    if price and mcost:
-        ratio = mcost / price
-        ratio_txt = f"{ratio:.0f}" if ratio >= 10 else f"{ratio:.1f}"
-        cc_lines.append(f"本月累計：API 等值 ${mcost:.2f}（約 {plan} 月費 ${price} 的 {ratio_txt} 倍）")
-    else:
-        cc_lines.append(f"本月累計：API 等值 ${mcost:.2f}")
+    cc_lines.append(f"本月累計：API 等值 ${mcost:.2f}")
     cc_lines.append("僅供參考：只計本機 Claude Code 紀錄，依 API 牌價換算，非實際帳單 | size=11 color=gray")
 except Exception as e:
     cc_lines.append(f"ccusage 讀取失敗：{type(e).__name__} | color=gray")
