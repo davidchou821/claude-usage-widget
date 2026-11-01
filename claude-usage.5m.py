@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 # <xbar.title>Claude Usage Monitor</xbar.title>
-# <xbar.version>v1.1</xbar.version>
+# <xbar.version>v1.2</xbar.version>
 # <xbar.author>David Chou</xbar.author>
 # <xbar.author.github>davidchou821</xbar.author.github>
 # <xbar.desc>Monitor your Claude subscription usage in the menu bar: 5-hour window & weekly limits (shared across claude.ai web / desktop / Claude Code), local token & API-equivalent cost stats, multi-account switching, and a system notification at 90%. Reads Claude Code's OAuth token from Keychain (macOS asks for permission); token is only sent to api.anthropic.com. Designed for SwiftBar.</xbar.desc>
@@ -298,7 +298,8 @@ try:
     cred = read_cred(account)
     usage, now = None, time.time()
     expired = not account and cred.get("expiresAt", now * 1000) / 1000 < now
-    # 方案很少變動，profile 每 PLAN_TTL 秒查一次；查不到就 30 分鐘後再試，先用快取或 Keychain 的值
+    # 方案很少變動，profile 每 PLAN_TTL 秒查一次；查不到就 30 分鐘後再試，先用快取；
+    # 不退回 Keychain 的 subscriptionType，那是登入當下的值，升降級後會顯示錯的方案，寧可不顯示
     # 目前登入帳號以 email 區分，Claude Code 換帳號登入時不會沿用舊方案
     plan_key = account or "__current__:" + current_email()
     pc = plan_cache.get(plan_key) or {}
@@ -310,7 +311,7 @@ try:
         pc = {"plan": p or pc.get("plan", ""), "next": now + (PLAN_TTL if p else 1800)}
         plan_cache[plan_key] = pc
         save_state(st)
-    plan = pc.get("plan") or plan_name(cred.get("subscriptionType"), cred.get("rateLimitTier"))
+    plan = pc.get("plan", "")
     if not expired and now >= cached.get("retry_at", 0):
         code, retry, resp = fetch_usage(get_access_token(account, cred))
         # 錯誤格式有 {"type":"error","error":{...}} 與只有 {"error":{...}} 兩種
