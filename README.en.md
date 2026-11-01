@@ -22,7 +22,8 @@ Shows `CC 30% ⁄49` in the menu bar (5-hour window % ⁄ Fable weekly %) — or
 
 **Tokens / cost** (local stats, account-independent)
 - Today's output tokens, cache reads, API-equivalent cost + per-model breakdown
-- Month-to-date cost (⚠ reference price *as if* billed via API — not your actual subscription bill)
+- Month-to-date API-equivalent cost, also shown as a multiple of your plan's list price (Pro $20, Max 5x $100, Max 20x $200)
+  ⚠ For reference only: what it would cost *if* billed via the API, not your actual bill; counts only this machine's Claude Code logs, not claude.ai web, the desktop app, or other computers
 
 ## Multiple accounts
 

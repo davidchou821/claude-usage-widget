@@ -22,7 +22,8 @@ macOS 選單列的 Claude 用量監測 widget（SwiftBar plugin）。
 
 **Token／費用**（本機統計，不分帳號）
 - 今日輸出 token、cache 讀取量、API 等值費用＋各模型明細
-- 本月累計費用（⚠ 為「若走 API 計費」的參考價，不是訂閱實際帳單）
+- 本月累計的 API 等值費用，並換算成訂閱月費的倍數（依牌價：Pro $20、Max 5x $100、Max 20x $200）
+  ⚠ 僅供參考：是「若走 API 計費」的換算，不是實際帳單；只計本機 Claude Code 的紀錄，不含 claude.ai 網頁、桌面 app 與其他電腦的用量
 
 ## 多帳號切換
 
