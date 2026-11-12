@@ -4,7 +4,7 @@
 # <xbar.version>v1.3</xbar.version>
 # <xbar.author>David Chou</xbar.author>
 # <xbar.author.github>davidchou821</xbar.author.github>
-# <xbar.desc>Monitor your Claude subscription usage in the menu bar: your current plan (Pro / Max 5x / Max 20x), 5-hour window & weekly limits (shared across claude.ai web / desktop / Claude Code), local token & API-equivalent cost stats, multi-account switching, and a system notification at 90%. Reads Claude Code's OAuth token from Keychain (macOS asks for permission); token is only sent to api.anthropic.com. Designed for SwiftBar.</xbar.desc>
+# <xbar.desc>Monitor your Claude subscription usage in the menu bar: your current plan (Pro / Max / Ultra), 5-hour window & weekly limits (shared across claude.ai web / desktop / Claude Code), local token & API-equivalent cost stats, multi-account switching, and a system notification at 90%. Reads Claude Code's OAuth token from Keychain (macOS asks for permission); token is only sent to api.anthropic.com. Designed for SwiftBar.</xbar.desc>
 # <xbar.image>https://raw.githubusercontent.com/davidchou821/claude-usage-widget/main/docs/screenshot.png</xbar.image>
 # <xbar.dependencies>python3, Claude Code (logged in), ccusage (token/cost section)</xbar.dependencies>
 # <xbar.abouturl>https://github.com/davidchou821/claude-usage-widget</xbar.abouturl>
@@ -130,12 +130,14 @@ def read_cred(account):
 
 
 def plan_name(sub, tier):
-    """方案（pro/max/team…）＋ rate limit tier 裡的倍數（分 Max 5x/20x）；讀不到回空字串"""
+    """方案（pro/max/team…）；讀不到回空字串。
+    2026-10-30 起 Max 5x 改名 Max、Max 20x 改名 Ultra，但 API 仍回 claude_max＋default_claude_max_20x"""
     sub = re.sub(r"^claude_", "", str(sub or ""))
     if not sub:
         return ""
-    m = re.search(r"(\d+)x", str(tier or ""))
-    return re.sub(r"[|\s]+", "", sub.capitalize())[:20] + (f" {m.group(1)}x" if m else "")
+    if sub == "max" and re.search(r"20x", str(tier or "")):
+        return "Ultra"
+    return re.sub(r"[|\s]+", "", sub.capitalize())[:20]
 
 
 def get_access_token(account, cred):
@@ -341,7 +343,11 @@ try:
     sd = usage.get("seven_day") or {}
     five = live(fh.get("utilization"), fh.get("resets_at", ""))
     seven = live(sd.get("utilization"), sd.get("resets_at", ""))
-    metrics.append(("5小時窗口", five, fh.get("resets_at", "")))
+    if fh or not sd:
+        metrics.append(("5小時窗口", five, fh.get("resets_at", "")))
+    else:  # Ultra（已驗證帳號）沒有 5 小時限制，標題改顯示週限額
+        five = seven
+        plan_lines.append("5小時窗口：無限制 | color=gray")
     metrics.append(("週限額（全部模型）", seven, sd.get("resets_at", "")))
     for lim in usage.get("limits", []):
         if lim.get("kind") == "weekly_scoped" and lim.get("scope"):

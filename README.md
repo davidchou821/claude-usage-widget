@@ -35,7 +35,7 @@ macOS 選單列的 Claude 用量監測 widget（SwiftBar plugin）。
 
 「方案額度」標題和「目前登入」會顯示 Claude Code 目前登入帳號的 email（讀 `~/.claude.json`，有設 `CLAUDE_CONFIG_DIR` 就讀該目錄）；已存帳號會記下存檔當下的 email，顯示成「名稱（email）」。
 
-標題也會顯示訂閱方案（例如「方案額度・Max 5x（email）」），查自 `api.anthropic.com/api/oauth/profile`，每 6 小時更新一次，所以升降級後最多 6 小時才會反映；還沒查到過時不顯示方案。
+標題也會顯示訂閱方案（例如「方案額度・Max（email）」），查自 `api.anthropic.com/api/oauth/profile`，每 6 小時更新一次，所以升降級後最多 6 小時才會反映；還沒查到過時不顯示方案。
 
 已存帳號的 token 放在 Keychain 的 `claude-usage-widget:<名稱>` 條目，快過期時會用 refresh token 自動續期，不需重新登入（續期用的 OAuth client ID 預設從本機 Claude Code 自動讀取，見下方「自訂」）。按住 **⌥（Option）** 點帳號名稱可移除。選中非「目前登入」帳號時，選單列的 `CC` 會換成該帳號名稱。
 
